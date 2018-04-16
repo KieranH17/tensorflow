@@ -1,39 +1,43 @@
 import chess.pgn
 import chess
 import numpy as np
+import pandas as pd
 
 
-# returns a tuple (list of Magnus white games, list of Magnus black games)
+# returns a list of games (default: list of Magnus games)
 def pgn_file_to_games(pgn_file, player_name="Carlsen", pseudo="DrDrunkenstein"):
-    mag_offsets = []
+    offsets = []
+
     for offset, headers in chess.pgn.scan_headers(pgn_file):
-        if (player_name in headers["White"] or player_name in headers["Black"])\
-                or pseudo in headers["White"] or pseudo in headers["Black"]:
-            mag_offsets.append(offset)
+        if player_name in headers["White"] or player_name in headers["Black"]\
+                or pseudo in headers["White"] or pseudo in headers["Black"]\
+                or (not player_name and not pseudo):
+            offsets.append(offset)
 
-    mag_games = []
+    games = []
 
-    for offset in mag_offsets:
+    for offset in offsets:
         pgn_file.seek(offset)
-        mag_games.append(chess.pgn.read_game(pgn_file))
+        games.append(chess.pgn.read_game(pgn_file))
 
-    return mag_games
+    return games
 
 
-# returns a list of decisions made by Magnus (a decision is a tuple consisting
-# of a board state (list of FEN fields) and the move (a UCI string) Magnus made)
-# returns None if not a magnus game
+# appends to the given lists (feature_dict & labels) the decisions made by player_name
+# (decisions consist of 1. features: board state (list of FEN fields) and 2. labels:
+# move (a UCI string) player_name made) ... does nothing if not a player_name game
 def game_to_train_data(game, feature_dict, labels, player_name="Carlsen", pseudo="DrDrunkenstein"):
     board = game.board()
     if player_name in game.headers["White"] or pseudo in game.headers["White"]:
-        mag_color = chess.WHITE
+        color = chess.WHITE
     elif player_name in game.headers["Black"] or pseudo in game.headers["Black"]:
-        mag_color = chess.BLACK
+        color = chess.BLACK
     else:
-        return None
+        return
 
     for move in game.main_line():
-        if mag_color == board.turn:
+        if color == board.turn:
+
             features = board_to_features(board)
             feature_dict.get("board_array").append(features[0])
             feature_dict.get("turn").append(features[1])
@@ -47,15 +51,43 @@ def game_to_train_data(game, feature_dict, labels, player_name="Carlsen", pseudo
         board.push(move)
 
 
-def pgn_to_train_data(pgn_file, player_name="Carlsen", pseudo="DrDrunkenstein"):
-    games = pgn_file_to_games(pgn_file)
+# if csv_path, saves a csv file version of the pgn
+def pgn_to_train_data(pgn_file, player_name="Carlsen", pseudo="DrDrunkenstein", csv_path=None):
+    games = pgn_file_to_games(pgn_file, player_name, pseudo)
 
     feature_dict = {"board_array": [], "turn": [], "castling": [], "en_pass": [], "legal_moves": []}
     labels = []
     for game in games:
         game_to_train_data(game, feature_dict, labels, player_name, pseudo)
 
+    if csv_path:
+        features_to_csv(feature_dict, labels, csv_path)
+
     return feature_dict, labels
+
+
+# writes features/labels to csv file named csv_path (non-destructive)
+def features_to_csv(feature_dict, labels, csv_path):
+    dict_length = len(labels)
+    if dict_length > 25000:
+        num_splits = dict_length // 25000 + 1
+        for i in range(num_splits):
+            start_ind = i * 25000
+            end_ind = (i + 1) * 25000
+            if i == num_splits - 1:
+                end_ind = dict_length - 1
+            file_name = open(csv_path + i, "w+")
+            feature_dict_new = {"board_array": feature_dict["board_array"][start_ind:end_ind],
+                                "turn": feature_dict["turn"][start_ind:end_ind],
+                                "castling": feature_dict["castling"][start_ind:end_ind],
+                                "en_pass": feature_dict["en_pass"][start_ind:end_ind],
+                                "legal_moves": feature_dict["legal_moves"][start_ind:end_ind],
+                                "labels": labels[start_ind:end_ind]}
+            (pd.DataFrame(feature_dict_new)).to_csv(file_name)
+    else:
+        feature_dict_new = feature_dict.copy()
+        feature_dict_new.update({"labels": labels})
+        (pd.DataFrame(feature_dict_new)).to_csv(csv_path)
 
 
 # Takes ONLY the string of the piece positions from the fen
@@ -129,7 +161,8 @@ def board_to_features(board):
                                      board.has_kingside_castling_rights(chess.BLACK),
                                      board.has_queenside_castling_rights(chess.BLACK)])
     fen_fields = [board.board_fen(), board.turn, castling_right_array,
-                  board.ep_square, board.halfmove_clock, board.fullmove_number, board.legal_moves]
+                  board.ep_square, board.halfmove_clock, board.fullmove_number,
+                  board.legal_moves]
 
     board_state = fen_fields
     board_array = fen_pos_to_64array(board_state[0])
@@ -138,13 +171,12 @@ def board_to_features(board):
     ep_int = board_state[3]
     if not ep_int:
         ep_int = 0
+
     legal_moves = []
-    legal_vector = []
     for move in board_state[6]:
-        legal_moves.append(move.uci())
-    for move in all_possible_moves:
-        if move in legal_moves:
-            legal_vector.append(1)
-        else:
-            legal_vector.append(-1)
-    return [board_array, turn, castling_int_array.tolist(), ep_int, legal_vector]
+        legal_moves.append([move.from_square, move.to_square])
+    legal_moves.sort()
+    for _ in range(150-len(legal_moves)):
+        legal_moves.append([0, 0])
+
+    return [board_array, turn, castling_int_array.tolist(), ep_int, legal_moves]
