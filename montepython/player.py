@@ -1,7 +1,5 @@
-import magnus_engine
 import chess
 import mc_search
-import pickle
 
 
 class Player:
@@ -37,25 +35,15 @@ class MontePython(Player):
     def __init__(self, board, timer):
         Player.__init__(self, board)
         self.timer = timer
-        with open("seen_pos_legmov/seen_pos.pkl", "rb") as read_file:
-            try:
-                self.seen_pos_legmov_dict = pickle.load(read_file)
-            except EOFError:
-                self.seen_pos_legmov_dict = {}
-
         self.state = mc_search.State()
+        self.legal_move_memo = {}
 
     def my_move(self, timer=None):
         if not timer:
             timer = self.timer
-        move_uci = mc_search.monte_python_search(self.state, timer, self.seen_pos_legmov_dict)
-        self.state = mc_search.State((self.state, move_uci))
-        self.write_legmov_file()
+        move_uci = mc_search.monte_python_search(self.state, timer, self.legal_move_memo)
+        self.update_state(move_uci)
         return chess.Move.from_uci(move_uci)
 
-    def update_state(self, opp_move_uci):
-        self.state = mc_search.State((self.state, opp_move_uci))
-
-    def write_legmov_file(self):
-        with open("seen_pos_legmov/seen_pos.pkl", "wb") as write_file:
-            pickle.dump(self.seen_pos_legmov_dict, write_file)
+    def update_state(self, move_uci):
+        self.state = mc_search.State((self.state, move_uci))
