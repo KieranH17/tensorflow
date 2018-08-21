@@ -1,43 +1,47 @@
 
-import tensorflow as tf
 import chess
 import time
 from random import randrange, choice
 from math import sqrt, log
 import state
+import tensorflow as tf
+import numpy as np
 
 
-def monte_python_search(root_state, timer, legal_move_memo):
-    root_node = Node(root_state, legal_move_memo)
+def monte_python_search(root_state, timer, board_classifier=None):
+    root_node = Node(root_state)
     i = 0
     timeout = time.time() + timer
     while time.time() < timeout:
-        next_node = tree_policy(root_node, legal_move_memo)
-        outcome = default_policy(next_node.state)
+        next_node = tree_policy(root_node)
+        if not board_classifier:
+            outcome = default_policy(next_node.state)
+        else:
+            outcome = default_nn_policy(next_node.state, board_classifier)
         backup(next_node, outcome)
         i += 1
     print(i)
     return best_child(root_node, 0).parent_action
 
 
-def tree_policy(node, legal_move_memo):
+def tree_policy(node):
     curr_node = node
     while not curr_node.state.is_terminal():
         if curr_node.unexplored_actions:
-            return expand(curr_node, legal_move_memo)
+            return expand(curr_node)
         else:
             curr_node = best_child(curr_node)
     return curr_node
 
 
-def expand(node, legal_move_memo):
+def expand(node):
     unexplored_actions = node.unexplored_actions
     rand_ind = randrange(len(unexplored_actions))
     unexplored_actions[rand_ind], unexplored_actions[-1] = \
         unexplored_actions[-1], unexplored_actions[rand_ind]
     action = unexplored_actions.pop()
     new_state = state.State((node.state, action))
-    new_child_node = Node(new_state, legal_move_memo, parent=node, parent_action=action)
+    new_child_node = Node(new_state, parent=node, parent_action=action)
     node.add_child(new_child_node)
     return new_child_node
 
@@ -62,6 +66,21 @@ def default_policy(curr_state):
     return terminal_state_to_outcome(curr_state)
 
 
+def default_nn_policy(curr_state, board_classifier):
+    pred_state = curr_state.get_input_layers()
+    pred_input_fn = tf.estimator.inputs.numpy_input_fn(
+        x=np.asarray(pred_state),
+        num_epochs=1,
+        shuffle=False)
+    predictions = board_classifier.predict(pred_input_fn)
+    prediction_dict = next(predictions)
+    class_name = prediction_dict["classes"]
+    probability = prediction_dict["probabilities"][class_name]
+
+    print(class_name, probability)
+    return [-1, 0, 1][class_name]
+
+
 def backup(node, reward):
     curr_node = node
     if curr_node.parent_turn == chess.BLACK:
@@ -75,7 +94,8 @@ def backup(node, reward):
 
 class Node:
     # parent_action is the Move taken by the parent to get to this node
-    def __init__(self, my_state, legal_move_memo, parent=None, parent_action=None):
+    def __init__(self, my_state, parent=None, parent_action=None):
+
         self.state = my_state
         self.parent = parent
         self.parent_action = parent_action
@@ -83,13 +103,7 @@ class Node:
         self.visits = 0
         self.reward = 0
         self.parent_turn = not self.state.turn
-        self.legal_move_memo = legal_move_memo
-
-        if self.state.board.epd() in self.legal_move_memo:
-            self.unexplored_actions = self.legal_move_memo[self.state.board.epd()]
-        else:
-            self.unexplored_actions = [action for action in self.state.legal_actions]
-            self.legal_move_memo[self.state.board.epd()] = self.unexplored_actions
+        self.unexplored_actions = [action for action in self.state.legal_actions]
 
     def update_and_backprop(self, outcome_value):
         self.reward += outcome_value

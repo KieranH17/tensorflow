@@ -1,5 +1,6 @@
 import chess
 import mc_search
+import state
 
 
 class Player:
@@ -32,18 +33,19 @@ class Human(Player):
 
 
 class MontePython(Player):
-    def __init__(self, board, timer):
+    def __init__(self, board, timer, board_classifier=None):
         Player.__init__(self, board)
+        self.board_classifier = board_classifier
         self.timer = timer
-        self.state = mc_search.State()
+        self.state = state.State()
         self.legal_move_memo = {}
 
     def my_move(self, timer=None):
         if not timer:
             timer = self.timer
-        move_uci = mc_search.monte_python_search(self.state, timer, self.legal_move_memo)
+        move_uci = mc_search.monte_python_search(self.state, timer, board_classifier=self.board_classifier)
         self.update_state(move_uci)
         return chess.Move.from_uci(move_uci)
 
     def update_state(self, move_uci):
-        self.state = mc_search.State((self.state, move_uci))
+        self.state = state.State((self.state, move_uci))

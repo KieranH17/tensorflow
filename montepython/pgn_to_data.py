@@ -4,23 +4,14 @@ import numpy as np
 import pandas as pd
 
 
-# returns a list of games (default: list of Magnus games)
-def pgn_file_to_games(pgn_file, player_name="Carlsen", pseudo="DrDrunkenstein"):
-    offsets = []
+def pgn_file_to_games_and_results(pgn_file):
+    games_and_results = []
 
     for offset, headers in chess.pgn.scan_headers(pgn_file):
-        if player_name in headers["White"] or player_name in headers["Black"]\
-                or pseudo in headers["White"] or pseudo in headers["Black"]\
-                or (not player_name and not pseudo):
-            offsets.append(offset)
+            pgn_file.seek(offset)
+            games_and_results.append((chess.pgn.read_game(pgn_file), headers["Result"]))
 
-    games = []
-
-    for offset in offsets:
-        pgn_file.seek(offset)
-        games.append(chess.pgn.read_game(pgn_file))
-
-    return games
+    return games_and_results
 
 
 # appends to the given lists (feature_dict & labels) the decisions made by player_name

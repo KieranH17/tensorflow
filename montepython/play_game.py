@@ -2,7 +2,7 @@ import chess
 import player
 
 
-def main():
+def main(cnn_model = None):
     board = chess.Board()
     print("White or black?")
 
@@ -24,11 +24,17 @@ def main():
 
     if player_color.lower() == "white":
         white = player.Human(board)
-        black = player.MontePython(board, comp_time)
+        if cnn_model:
+            black = player.MontePython(board, comp_time, cnn_model)
+        else:
+            black = player.MontePython(board, comp_time)
         update_black = True
         update_white = False
     else:
-        white = player.MontePython(board, comp_time)
+        if cnn_model:
+            white = player.MontePython(board, comp_time, cnn_model)
+        else:
+            white = player.MontePython(board, comp_time)
         black = player.Human(board)
         update_white = True
         update_black = False
