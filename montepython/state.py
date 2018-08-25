@@ -11,6 +11,9 @@ class State:
         if not old_state_and_action:
             self.board = chess.Board()
 
+            self.my_pieces = {chess.WHITE: get_piece_planes(self.board, chess.WHITE),
+                              chess.BLACK: get_piece_planes(self.board, chess.BLACK)}
+
             self.legal_actions = [move.uci() for move in self.board.legal_moves]
 
             self.rep_count = defaultdict(int)
@@ -36,6 +39,8 @@ class State:
 
             self.board = old_state.board.copy()
             self.board.push(move)
+
+            self.my_pieces = get_updated_pieces(old_state, move)
 
             self.legal_actions = [move.uci() for move in self.board.legal_moves]
 
@@ -63,23 +68,9 @@ class State:
         return False
 
     def get_input_layers(self):
-        my_pieces = get_piece_planes(self.board, self.board.turn)
-        opp_pieces = get_piece_planes(self.board, not self.board.turn)
 
-        if self.board.turn == chess.BLACK:
-            my_pieces_temp = []
-            for i in range(len(my_pieces)):
-                my_pieces_temp.append(my_pieces[i][::-1])
-
-            opp_pieces_temp = []
-            for i in range(len(opp_pieces)):
-                opp_pieces_temp.append(opp_pieces[i][::-1])
-
-            my_pieces = my_pieces_temp
-            opp_pieces = opp_pieces_temp
-
-        my_piece_vectors = piece_plane_from_64_to_8x8(my_pieces)
-        opp_piece_vectors = piece_plane_from_64_to_8x8(opp_pieces)
+        white_piece_vectors = self.my_pieces[chess.WHITE]
+        black_piece_vectors = self.my_pieces[chess.BLACK]
 
         my_king_castle_vector = [[int(self.my_king_castling)] * 8] * 8
         my_queen_castle_vector = [[int(self.my_queen_castling)] * 8] * 8
@@ -92,8 +83,8 @@ class State:
 
         input_vector = []
 
-        input_vector.extend(np.asarray(my_piece_vectors).astype(np.float16))
-        input_vector.extend(np.asarray(opp_piece_vectors).astype(np.float16))
+        input_vector.extend(np.asarray(white_piece_vectors).astype(np.float16))
+        input_vector.extend(np.asarray(black_piece_vectors).astype(np.float16))
 
         input_vector.append(np.asarray(my_king_castle_vector).astype(np.float16))
         input_vector.append(np.asarray(my_queen_castle_vector).astype(np.float16))
@@ -129,43 +120,75 @@ def get_state_after_opening(opening_actions):
     return curr_state
 
 
-# called after board perspective switches
-def update_piece_planes(new_state, old_state, move):
-    start_ind = move.from_square
-    end_ind = move.to_square
-    piece = old_state.board.piece_at(start_ind)
-    if move.promotion:
-        new_piece_type = move.promotion
-    else:
-        new_piece_type = piece.piece_type
-
-    new_state.opp_pieces[new_piece_type - 1][63 - start_ind] = 0
-    new_state.opp_pieces[new_piece_type - 1][63 - end_ind] = 1
-    for i in range(NUM_PIECE_TYPES):
-        new_state.my_pieces[i][63 - end_ind] = 0
-
-
 def get_piece_planes(board, color):
-    pawn_list = [0] * 64
-    knight_list = [0] * 64
-    bishop_list = [0] * 64
-    rook_list = [0] * 64
-    queen_list = [0] * 64
-    king_list = [0] * 64
+    pawn_list = get_8x8_zeros()
+    knight_list = get_8x8_zeros()
+    bishop_list = get_8x8_zeros()
+    rook_list = get_8x8_zeros()
+    queen_list = get_8x8_zeros()
+    king_list = get_8x8_zeros()
     player_piece_lists = [pawn_list, knight_list, bishop_list, rook_list, queen_list, king_list]
 
     for i in range(NUM_PIECE_TYPES):
+        # tells which index (on board tiles labeled 0-63) a piece 1
         piece_indices = board.pieces(i+1, color)
         for j in piece_indices:
-            player_piece_lists[i][j] = 1
+            x, y = x_y_from_ind(j)
+            player_piece_lists[i][y][x] = 1
 
     return player_piece_lists
 
 
+def get_8x8_zeros():
+    lst = []
+    for _ in range(8):
+        lst.append([0] * 8)
+    return lst
+
+
+def get_updated_pieces(old_state, move):
+    my_pieces = {chess.WHITE: [], chess.BLACK: []}
+
+    move_start_ind = move.from_square
+    x_start, y_start = x_y_from_ind(move_start_ind)
+    move_end_ind = move.to_square
+    x_end, y_end = x_y_from_ind(move_end_ind)
+
+    piece_type_taken = old_state.board.piece_type_at(move_end_ind)
+    piece_type_moved = old_state.board.piece_type_at(move_start_ind)
+
+    # FIX_ ME
+    # Doesn't work for castles or piece promotions
+    for i in range(NUM_PIECE_TYPES):
+        if i + 1 == piece_type_moved:
+            my_pieces[old_state.turn].append(old_state.my_pieces[old_state.turn][i][:])
+            my_pieces[old_state.turn][i][y_start] = \
+                my_pieces[old_state.turn][i][y_start][:x_start] \
+                + [0] + my_pieces[old_state.turn][i][y_start][x_start+1:]
+            my_pieces[old_state.turn][i][y_end] = \
+                my_pieces[old_state.turn][i][y_end][:x_end] + [1] + my_pieces[old_state.turn][i][y_end][x_end+1:]
+        else:
+            my_pieces[old_state.turn].append(old_state.my_pieces[old_state.turn][i])
+
+        if i + 1 == piece_type_taken:
+            my_pieces[not old_state.turn].append(old_state.my_pieces[not old_state.turn][i][:])
+            my_pieces[not old_state.turn][i][y_end] = \
+                my_pieces[not old_state.turn][i][y_end][:x_end] \
+                + [0] + my_pieces[not old_state.turn][i][y_end][x_end + 1:]
+        else:
+            my_pieces[not old_state.turn].append(old_state.my_pieces[not old_state.turn][i])
+
+    return my_pieces
+
+
+def x_y_from_ind(i):
+    return i % 8, i // 8
+
+
 def piece_plane_from_64_to_8x8(piece_plane):
-    my_piece_vectors = [[[0] * 8] * 8] * 6
+    my_piece_vectors = []
     for i in range(len(piece_plane)):
-        my_piece_vectors[i] = [piece_plane[i][j:j + 8] for j in range(0, len(piece_plane[i]), 8)]
+        my_piece_vectors.append([piece_plane[i][j:j + 8] for j in range(0, len(piece_plane[i]), 8)])
 
     return my_piece_vectors
 

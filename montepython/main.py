@@ -7,12 +7,13 @@ import os
 import sys
 import pgn_to_data
 import play_game
+from random import shuffle
 
 
 def main():
     board_result_classifier = tf.estimator.Estimator(
         model_fn=montepython_cnn.mp_ccn_fn,
-        model_dir="models/montepython_boardeval_two"
+        model_dir="models/montepython_boardeval_unsided"
     )
 
     if sys.argv[1] == "play":
@@ -46,10 +47,12 @@ def main():
         states.extend(states_to_add)
         outcomes.extend(outcomes_to_add)
     all_features = [state.get_input_layers() for state in states]
+    features_and_labels = list(zip(all_features, outcomes))
+    shuffle(features_and_labels)
 
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
-        x=np.asarray(all_features),
-        y=np.asarray(outcomes),
+        x=np.asarray([feature for feature, label in features_and_labels]),
+        y=np.asarray([label for feature, label in features_and_labels]),
         batch_size=100,
         num_epochs=None,
         shuffle=True

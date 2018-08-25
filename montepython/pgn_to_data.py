@@ -41,22 +41,6 @@ def game_to_train_data(game, feature_dict, labels, player_name="Carlsen", pseudo
 
         board.push(move)
 
-
-# if csv_path, saves a csv file version of the pgn
-def pgn_to_train_data(pgn_file, player_name="Carlsen", pseudo="DrDrunkenstein", csv_path=None):
-    games = pgn_file_to_games(pgn_file, player_name, pseudo)
-
-    feature_dict = {"board_array": [], "turn": [], "castling": [], "en_pass": [], "legal_moves": []}
-    labels = []
-    for game in games:
-        game_to_train_data(game, feature_dict, labels, player_name, pseudo)
-
-    if csv_path:
-        features_to_csv(feature_dict, labels, csv_path)
-
-    return feature_dict, labels
-
-
 # writes features/labels to csv file named csv_path (non-destructive)
 def features_to_csv(feature_dict, labels, csv_path):
     dict_length = len(labels)
