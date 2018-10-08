@@ -27,7 +27,7 @@ def main():
         every_n_iter=50
     )
 
-    train_dir_name = "pgn_folder/small_test"
+    train_dir_name = "pgn_folder/humans_vs_comp_FICS(jan18)"
     train_pgns = []
     for file_name in os.listdir(train_dir_name):
         if file_name == ".DS_Store":
@@ -60,7 +60,7 @@ def main():
 
     board_result_classifier.train(
         input_fn=train_input_fn,
-        steps=6000,
+        steps=5000,
         hooks=[logging_hook]
     )
 

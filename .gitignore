@@ -1,0 +1,16 @@
+
+# PyCharm etc.
+bin/
+lib/
+*.DS_Store
+*.ipynb_checkpoints/
+models/
+include/
+*.pyc
+*.idea
+*.ipynb
+
+# training folders
+*.csv
+*.pgn
+montepython/pgn_folder

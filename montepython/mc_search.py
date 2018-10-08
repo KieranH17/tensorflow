@@ -78,7 +78,7 @@ def default_nn_policy(curr_state, board_classifier):
     probability = prediction_dict["probabilities"][class_name]
 
     print(class_name, probability)
-    return [1, 0, -1][class_name]
+    return [-1, 0, 1][class_name]
 
 
 def backup(node, reward):

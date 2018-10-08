@@ -40,7 +40,8 @@ class State:
             self.board = old_state.board.copy()
             self.board.push(move)
 
-            self.my_pieces = get_updated_pieces(old_state, move)
+            self.my_pieces = {chess.WHITE: get_piece_planes(self.board, chess.WHITE),
+                              chess.BLACK: get_piece_planes(self.board, chess.BLACK)}
 
             self.legal_actions = [move.uci() for move in self.board.legal_moves]
 
@@ -69,8 +70,8 @@ class State:
 
     def get_input_layers(self):
 
-        white_piece_vectors = self.my_pieces[chess.WHITE]
-        black_piece_vectors = self.my_pieces[chess.BLACK]
+        white_piece_vectors = piece_plane_from_64_to_8x8(self.my_pieces[chess.WHITE])
+        black_piece_vectors = piece_plane_from_64_to_8x8(self.my_pieces[chess.BLACK])
 
         my_king_castle_vector = [[int(self.my_king_castling)] * 8] * 8
         my_queen_castle_vector = [[int(self.my_queen_castling)] * 8] * 8
@@ -121,20 +122,19 @@ def get_state_after_opening(opening_actions):
 
 
 def get_piece_planes(board, color):
-    pawn_list = get_8x8_zeros()
-    knight_list = get_8x8_zeros()
-    bishop_list = get_8x8_zeros()
-    rook_list = get_8x8_zeros()
-    queen_list = get_8x8_zeros()
-    king_list = get_8x8_zeros()
+    pawn_list = [0] * 64
+    knight_list = [0] * 64
+    bishop_list = [0] * 64
+    rook_list = [0] * 64
+    queen_list = [0] * 64
+    king_list = [0] * 64
     player_piece_lists = [pawn_list, knight_list, bishop_list, rook_list, queen_list, king_list]
 
     for i in range(NUM_PIECE_TYPES):
         # tells which index (on board tiles labeled 0-63) a piece 1
         piece_indices = board.pieces(i+1, color)
         for j in piece_indices:
-            x, y = x_y_from_ind(j)
-            player_piece_lists[i][y][x] = 1
+            player_piece_lists[i][j] = 1
 
     return player_piece_lists
 
@@ -144,41 +144,6 @@ def get_8x8_zeros():
     for _ in range(8):
         lst.append([0] * 8)
     return lst
-
-
-def get_updated_pieces(old_state, move):
-    my_pieces = {chess.WHITE: [], chess.BLACK: []}
-
-    move_start_ind = move.from_square
-    x_start, y_start = x_y_from_ind(move_start_ind)
-    move_end_ind = move.to_square
-    x_end, y_end = x_y_from_ind(move_end_ind)
-
-    piece_type_taken = old_state.board.piece_type_at(move_end_ind)
-    piece_type_moved = old_state.board.piece_type_at(move_start_ind)
-
-    # FIX_ ME
-    # Doesn't work for castles or piece promotions
-    for i in range(NUM_PIECE_TYPES):
-        if i + 1 == piece_type_moved:
-            my_pieces[old_state.turn].append(old_state.my_pieces[old_state.turn][i][:])
-            my_pieces[old_state.turn][i][y_start] = \
-                my_pieces[old_state.turn][i][y_start][:x_start] \
-                + [0] + my_pieces[old_state.turn][i][y_start][x_start+1:]
-            my_pieces[old_state.turn][i][y_end] = \
-                my_pieces[old_state.turn][i][y_end][:x_end] + [1] + my_pieces[old_state.turn][i][y_end][x_end+1:]
-        else:
-            my_pieces[old_state.turn].append(old_state.my_pieces[old_state.turn][i])
-
-        if i + 1 == piece_type_taken:
-            my_pieces[not old_state.turn].append(old_state.my_pieces[not old_state.turn][i][:])
-            my_pieces[not old_state.turn][i][y_end] = \
-                my_pieces[not old_state.turn][i][y_end][:x_end] \
-                + [0] + my_pieces[not old_state.turn][i][y_end][x_end + 1:]
-        else:
-            my_pieces[not old_state.turn].append(old_state.my_pieces[not old_state.turn][i])
-
-    return my_pieces
 
 
 def x_y_from_ind(i):

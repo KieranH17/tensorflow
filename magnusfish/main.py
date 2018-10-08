@@ -22,9 +22,9 @@ def main():
 
     engine_model = magnus_engine.Model(training_pgns=train_pgns,
                                        save_dir="models/" + model_name,
-                                       batch_size=300,
+                                       batch_size=100,
                                        step_size=100000,
-                                       hidden_units=[1024, 512, 256])
+                                       hidden_units=[64, 8, 8, 4])
     engine_model.train()
 
     print(engine_model.predict_move("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"))
