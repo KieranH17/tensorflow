@@ -1,3 +1,3 @@
 # tensorflow_chess
 
-chess engines that use neural networks to predict the best moves
+simple chess engines to try out using neural networks to predict the best moves
