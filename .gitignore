@@ -14,3 +14,6 @@ include/
 *.csv
 *.pgn
 montepython/pgn_folder
+
+# Byte-compiled 
+__pycache__/
